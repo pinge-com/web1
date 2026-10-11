@@ -1,0 +1,36 @@
+name: threads-bot
+on:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "true면 실제 발행, 아니면 초안만"
+        default: "false"
+  schedule:
+    - cron: "17 0,6,11 * * *" # 하루 3회 (UTC) — 처음엔 비활성화하고 수동 실행으로 검수 권장
+permissions:
+  contents: write
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: threads-bot
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - name: run bot
+        env:
+          THREADS_ACCESS_TOKEN: ${{ secrets.THREADS_ACCESS_TOKEN }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          COUPANG_ACCESS_KEY: ${{ secrets.COUPANG_ACCESS_KEY }}
+          COUPANG_SECRET_KEY: ${{ secrets.COUPANG_SECRET_KEY }}
+        run: |
+          # 예약 실행은 안전하게 기본 dry-run, 수동 실행에서 publish=true일 때만 발행
+          if [ "${{ github.event.inputs.publish }}" = "true" ]; then python -m bot.main --publish; else python -m bot.main; fi
+      - name: commit state
+        run: |
+          git config user.name "threads-bot"; git config user.email "bot@users.noreply.github.com"
+          git add data/state.json && git commit -m "update bot state" && git push || true
